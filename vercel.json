@@ -1,5 +1,5 @@
 {
-  "rewrites": [
-    { "source": "/", "destination": "/polaroid/index.html" }
+  "redirects": [
+    { "source": "/", "destination": "/polaroid/", "permanent": false }
   ]
 }
