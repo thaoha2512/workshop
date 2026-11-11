@@ -1,0 +1,735 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Polaroid Maker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Kalam:wght@400&family=Homemade+Apple&family=Nunito+Sans:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="app.css">
+<style>
+/* Layout: the polaroid sits on a "desk" on the left; a narrow control card sits on the right and stacks below on phones. */
+.studio {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 32px;
+  align-items: start;
+}
+@media (max-width: 760px) { .studio { grid-template-columns: minmax(0, 1fr); } }
+.title-row h1 { font: 600 2.4rem/1 var(--hand); margin: 0; }
+.title-row p { margin: 4px 0 0; color: var(--muted); }
+
+/* The desk */
+.stage {
+  display: grid;
+  place-items: center;
+  padding: 24px 8px;
+  border-radius: 6px;
+  outline: 2px dashed transparent;
+  outline-offset: -2px;
+  transition: outline-color .15s;
+}
+.stage.dragging { outline-color: var(--accent); }
+#polaroid {
+  width: min(100%, 440px);
+  height: auto;
+  display: block;
+  transform: rotate(-2deg);
+  box-shadow: 0 2px 4px var(--shadow), 0 18px 40px var(--shadow);
+  cursor: grab;
+  touch-action: none;
+}
+#polaroid.panning { cursor: grabbing; }
+.hint { margin: 18px 0 0; font-size: 13px; color: var(--muted); text-align: center; }
+
+/* Controls */
+.controls {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 20px;
+  display: grid;
+  gap: 20px;
+}
+.field { display: grid; gap: 8px; }
+.label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+textarea, select {
+  font: inherit;
+  color: var(--fg);
+  background: var(--desk);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 10px;
+  width: 100%;
+}
+textarea { resize: vertical; min-height: 64px; }
+textarea:focus-visible, select:focus-visible, .upload:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+input[type="range"] { flex: 1; accent-color: var(--accent); min-width: 120px; }
+.small { font-size: 13px; color: var(--muted); }
+
+.upload {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  border: 1px dashed var(--muted);
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.upload:hover { border-color: var(--accent); color: var(--accent); }
+.upload input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+#filename { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+
+.inks { display: flex; gap: 10px; }
+.ink {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  cursor: pointer;
+  padding: 0;
+}
+.ink[aria-pressed="true"] { border-color: var(--fg); box-shadow: 0 0 0 2px var(--panel) inset; }
+
+.frames { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.frame-btn {
+  aspect-ratio: 4 / 5;
+  max-width: 100%;
+  border: 2px solid var(--line);
+  border-radius: 6px;
+  background: #fbfaf6 center / cover no-repeat;
+  cursor: pointer;
+  padding: 0;
+}
+.frame-btn[aria-pressed="true"] { border-color: var(--fg); box-shadow: 0 0 0 2px var(--panel) inset; }
+.frame-btn.loading { opacity: .5; }
+#frameName { font-size: 13px; color: var(--muted); }
+
+.save-box { display: grid; gap: 10px; border-top: 1px solid var(--line); padding-top: 18px; }
+.save-box .buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.share-box { display: grid; gap: 8px; border-top: 1px solid var(--line); padding-top: 18px; }
+.share-link {
+  font: 13px ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: var(--desk);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 10px;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage { transition: none; }
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="index.html">Polaroid Maker</a>
+  <nav>
+    <a class="navlink" href="index.html">My polaroids</a>
+    <a class="navlink" href="editor.html" id="navNew">New polaroid</a>
+    <span class="who" id="who"></span>
+    <button type="button" class="btn" id="logout">Log out</button>
+  </nav>
+</header>
+
+<div class="wrap">
+  <div class="title-row">
+    <h1 id="pageTitle">New polaroid</h1>
+    <p>Upload a photo, pick a frame, and write something in the strip at the bottom.</p>
+  </div>
+
+  <main class="studio">
+    <section class="stage" id="stage" aria-label="Polaroid preview">
+      <canvas id="polaroid" width="1080" height="1313" role="img" aria-label="Your polaroid"></canvas>
+      <p class="hint">Drag the photo to choose which part shows. You can also drop an image file here.</p>
+    </section>
+
+    <form class="controls" id="controls">
+      <div class="field">
+        <span class="label">Photo</span>
+        <label class="upload">
+          <input type="file" id="file" accept="image/*">
+          Choose a photo…
+        </label>
+        <span id="filename">Showing a sample photo</span>
+      </div>
+
+      <div class="field">
+        <span class="label" id="frameLabel">Frame</span>
+        <div class="frames" id="frames" role="group" aria-labelledby="frameLabel"></div>
+        <span id="frameName">Plain white</span>
+      </div>
+
+      <div class="field">
+        <label class="label" for="caption">Caption</label>
+        <textarea id="caption" maxlength="80" rows="2">Summer at the lake ☀</textarea>
+        <span class="small">Up to two lines. Press Enter for a new line.</span>
+      </div>
+
+      <div class="field">
+        <label class="label" for="font">Handwriting</label>
+        <select id="font">
+          <option value="Caveat" selected>Felt pen (Caveat)</option>
+          <option value="Kalam">Ballpoint (Kalam)</option>
+          <option value="Homemade Apple">Cursive (Homemade Apple)</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label class="label" for="size">Text size</label>
+        <div class="row">
+          <input type="range" id="size" min="40" max="130" value="92">
+          <span class="small" id="sizeOut">92</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <span class="label" id="inkLabel">Ink colour</span>
+        <div class="inks" role="group" aria-labelledby="inkLabel">
+          <button type="button" class="ink" data-ink="#1f2023" style="background:#1f2023" aria-label="Black" aria-pressed="true"></button>
+          <button type="button" class="ink" data-ink="#1f3f8f" style="background:#1f3f8f" aria-label="Blue" aria-pressed="false"></button>
+          <button type="button" class="ink" data-ink="#b0252b" style="background:#b0252b" aria-label="Red" aria-pressed="false"></button>
+          <button type="button" class="ink" data-ink="#5a5f66" style="background:#5a5f66" aria-label="Pencil grey" aria-pressed="false"></button>
+        </div>
+      </div>
+
+      <div class="save-box">
+        <div class="buttons">
+          <button type="submit" class="btn primary" id="save">Save</button>
+          <button type="button" class="btn" id="download">Download PNG</button>
+        </div>
+        <p class="msg" id="status" role="status"></p>
+      </div>
+
+      <div class="share-box" id="shareBox" hidden>
+        <span class="label">Share</span>
+        <div id="shareOff">
+          <p class="small" style="margin:0 0 8px">Only you can see this polaroid. Create a link to let others view it. They won't be able to edit it.</p>
+          <button type="button" class="btn" id="shareOnBtn">Create view-only link</button>
+        </div>
+        <div id="shareOn" hidden>
+          <p class="small" style="margin:0">Anyone with this link can view this polaroid:</p>
+          <div class="share-link" id="shareLink"></div>
+          <div class="row">
+            <button type="button" class="btn" id="copyLink">Copy link</button>
+            <button type="button" class="btn danger" id="shareOffBtn">Stop sharing</button>
+          </div>
+        </div>
+      </div>
+    </form>
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script>
+// Real Polaroid 600 proportions: 88 × 107 mm card, 79 × 79 mm photo,
+// thin sides, a slightly thicker top, and a wide strip at the bottom for writing.
+const W = 1080, H = 1313;
+const SIDE = 55, TOP = 66, PHOTO = 970;
+const STRIP_TOP = TOP + PHOTO;          // where the writing strip starts
+const STRIP_H = H - STRIP_TOP;          // 277 px
+
+const { sb } = App;
+const canvas = document.getElementById('polaroid');
+const ctx = canvas.getContext('2d');
+const $ = (id) => document.getElementById(id);
+
+const state = {
+  image: makeSamplePhoto(),
+  panX: 0.5,  // 0 = show left edge, 1 = show right edge
+  panY: 0.5,
+  ink: '#1f2023',
+  frame: 'plain',
+  pattern: null,       // null = plain white frame, otherwise a loaded pattern image
+  user: null,
+  row: null,           // the saved polaroid being edited, or null for a new one
+  photoChanged: true,  // does the photo need uploading on the next save?
+  dirty: false,        // unsaved changes?
+};
+
+// Frame patterns live in the patterns/ folder; small previews are in patterns/thumbs/.
+const PATTERNS = [
+  { id: 'plain', name: 'Plain white' },
+  { id: 'blue-gingham-stars', name: 'Blue gingham with stars' },
+  { id: 'rainbow-plaid-stars', name: 'Rainbow plaid with stars' },
+  { id: 'lavender-lime-stripes', name: 'Lavender and lime stripes' },
+  { id: 'lime-starbursts', name: 'Lime starbursts' },
+  { id: 'pastel-grain', name: 'Pastel grain' },
+  { id: 'rainbow-glitter', name: 'Rainbow glitter' },
+];
+const patternCache = {};
+
+function loadPattern(id) {
+  if (!patternCache[id]) {
+    patternCache[id] = new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => { delete patternCache[id]; reject(new Error('pattern')); };
+      img.src = `patterns/${id}.jpg`;
+    });
+  }
+  return patternCache[id];
+}
+
+function buildFramePicker() {
+  const box = $('frames');
+  PATTERNS.forEach((p) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'frame-btn';
+    btn.dataset.frame = p.id;
+    btn.setAttribute('aria-label', p.name);
+    btn.setAttribute('aria-pressed', p.id === 'plain' ? 'true' : 'false');
+    btn.title = p.name;
+    if (p.id !== 'plain') btn.style.backgroundImage = `url("patterns/thumbs/${p.id}.jpg")`;
+    btn.addEventListener('click', () => { chooseFrame(p.id); markDirty(); });
+    box.appendChild(btn);
+  });
+}
+
+async function chooseFrame(id) {
+  const p = PATTERNS.find((x) => x.id === id) || PATTERNS[0];
+  const btn = document.querySelector(`.frame-btn[data-frame="${p.id}"]`);
+  document.querySelectorAll('.frame-btn').forEach((b) => b.setAttribute('aria-pressed', 'false'));
+  btn.setAttribute('aria-pressed', 'true');
+  $('frameName').textContent = p.name;
+  state.frame = p.id;
+  if (p.id === 'plain') { state.pattern = null; render(); return; }
+  btn.classList.add('loading');
+  try {
+    const img = await loadPattern(p.id);
+    if (state.frame === p.id) { state.pattern = img; render(); }
+  } catch (e) {
+    say(`Couldn't load the "${p.name}" pattern. Check your connection and try again.`, 'error');
+  } finally {
+    btn.classList.remove('loading');
+  }
+}
+
+// A painted sample so the page opens showing what it does.
+function makeSamplePhoto() {
+  const c = document.createElement('canvas');
+  c.width = 1200; c.height = 900;
+  const g = c.getContext('2d');
+  const sky = g.createLinearGradient(0, 0, 0, 560);
+  sky.addColorStop(0, '#f6b26b'); sky.addColorStop(0.6, '#f9d9a8'); sky.addColorStop(1, '#fbe9cf');
+  g.fillStyle = sky; g.fillRect(0, 0, 1200, 560);
+  g.fillStyle = '#fff4dc'; g.beginPath(); g.arc(760, 470, 90, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#7d8f8a';
+  g.beginPath(); g.moveTo(0, 560); g.lineTo(0, 420); g.quadraticCurveTo(220, 330, 460, 470); g.quadraticCurveTo(560, 520, 640, 560); g.fill();
+  g.fillStyle = '#5c6e6b';
+  g.beginPath(); g.moveTo(1200, 560); g.lineTo(1200, 400); g.quadraticCurveTo(1000, 360, 860, 560); g.fill();
+  const water = g.createLinearGradient(0, 560, 0, 900);
+  water.addColorStop(0, '#6f9fb6'); water.addColorStop(1, '#2f5f78');
+  g.fillStyle = water; g.fillRect(0, 560, 1200, 340);
+  g.strokeStyle = 'rgba(255, 240, 210, .55)'; g.lineWidth = 4;
+  for (let i = 0; i < 14; i++) {
+    const y = 590 + i * 22, w = 160 - i * 8;
+    g.beginPath(); g.moveTo(760 - w / 2, y); g.lineTo(760 + w / 2, y); g.stroke();
+  }
+  g.fillStyle = '#3b2e25'; g.fillRect(140, 700, 420, 26); g.fillRect(170, 726, 14, 174); g.fillRect(520, 726, 14, 174);
+  return c;
+}
+
+function imgSize(img) {
+  return { w: img.naturalWidth || img.width, h: img.naturalHeight || img.height };
+}
+
+function drawFrame() {
+  ctx.fillStyle = '#fbfaf6';
+  ctx.fillRect(0, 0, W, H);
+  const img = state.pattern;
+  if (!img) return;
+  // Fill the whole card with the pattern, cropping the extra like a photo.
+  const scale = Math.max(W / img.naturalWidth, H / img.naturalHeight);
+  const sw = W / scale, sh = H / scale;
+  ctx.drawImage(img, (img.naturalWidth - sw) / 2, (img.naturalHeight - sh) / 2, sw, sh, 0, 0, W, H);
+}
+
+function drawPhoto() {
+  const { w: iw, h: ih } = imgSize(state.image);
+  const scale = Math.max(PHOTO / iw, PHOTO / ih);   // fill the square, crop the rest
+  const sw = PHOTO / scale, sh = PHOTO / scale;
+  const sx = (iw - sw) * state.panX;
+  const sy = (ih - sh) * state.panY;
+  ctx.drawImage(state.image, sx, sy, sw, sh, SIDE, TOP, PHOTO, PHOTO);
+  // A faint edge where the photo meets the card, like the real thing.
+  ctx.strokeStyle = 'rgba(0, 0, 0, .12)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(SIDE + 1, TOP + 1, PHOTO - 2, PHOTO - 2);
+}
+
+// Break the caption into at most two lines that fit the strip, shrinking the text if needed.
+function layoutCaption(text, font, startSize) {
+  const maxWidth = W - SIDE * 2 - 40;
+  const maxLines = 2;
+  for (let size = startSize; size >= 24; size -= 2) {
+    ctx.font = `${size}px "${font}"`;
+    const lines = [];
+    for (const para of text.split('\n')) {
+      const words = para.split(/\s+/).filter(Boolean);
+      let line = '';
+      for (const word of words) {
+        const test = line ? line + ' ' + word : word;
+        if (ctx.measureText(test).width <= maxWidth || !line) line = test;
+        else { lines.push(line); line = word; }
+      }
+      lines.push(line);
+    }
+    while (lines.length && lines[lines.length - 1] === '') lines.pop();
+    const lineH = size * (font === 'Homemade Apple' ? 1.45 : 1.15);
+    const fits = lines.length <= maxLines &&
+      lines.every((l) => ctx.measureText(l).width <= maxWidth) &&
+      lines.length * lineH <= STRIP_H * 0.85;
+    if (fits) return { size, lines, lineH };
+  }
+  ctx.font = `24px "${font}"`;
+  return { size: 24, lines: text.split('\n').slice(0, maxLines), lineH: 28 };
+}
+
+function drawCaption() {
+  const text = $('caption').value.trim();
+  if (!text) return;
+  const font = $('font').value;
+  const { size, lines, lineH } = layoutCaption(text, font, Number($('size').value));
+  ctx.font = `${size}px "${font}"`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const centerY = STRIP_TOP + STRIP_H / 2;
+  const firstY = centerY - ((lines.length - 1) * lineH) / 2;
+  ctx.save();
+  // Written by hand, so not perfectly level.
+  ctx.translate(W / 2, centerY);
+  ctx.rotate(-0.012);
+  ctx.translate(-W / 2, -centerY);
+  if (state.pattern) {
+    // On a patterned frame, write on a white paper label so the words stay readable.
+    const textW = Math.max(...lines.map((l) => ctx.measureText(l).width));
+    const labelW = Math.min(W - SIDE * 2, textW + 70);
+    const labelH = Math.min(STRIP_H - 30, lines.length * lineH + 40);
+    const x = (W - labelW) / 2, y = centerY - labelH / 2;
+    ctx.shadowColor = 'rgba(0, 0, 0, .18)';
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetY = 3;
+    ctx.fillStyle = 'rgba(253, 252, 249, .95)';
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, y, labelW, labelH, 8); else ctx.rect(x, y, labelW, labelH);
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
+  }
+  ctx.fillStyle = state.ink;
+  lines.forEach((line, i) => ctx.fillText(line, W / 2, firstY + i * lineH));
+  ctx.restore();
+}
+
+function render() {
+  ctx.clearRect(0, 0, W, H);
+  drawFrame();
+  drawPhoto();
+  drawCaption();
+}
+
+// Wait for the handwriting font before drawing, so the canvas never uses a fallback font.
+async function renderWithFont() {
+  const font = $('font').value;
+  try { await document.fonts.load(`40px "${font}"`); } catch (e) { /* draw with fallback */ }
+  render();
+}
+
+function say(text, kind) {
+  $('status').textContent = text;
+  $('status').className = 'msg' + (kind ? ' ' + kind : '');
+}
+
+function markDirty() {
+  state.dirty = true;
+  if ($('status').classList.contains('ok')) say('');
+}
+window.addEventListener('beforeunload', (e) => {
+  if (state.dirty) { e.preventDefault(); e.returnValue = ''; }
+});
+
+// ---- Photo upload ----
+function loadFile(file) {
+  if (!file) return;
+  if (!file.type.startsWith('image/')) {
+    say(`"${file.name}" isn't an image. Choose a JPG, PNG or WebP file.`, 'error');
+    return;
+  }
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    state.image = img;
+    state.panX = state.panY = 0.5;
+    state.photoChanged = true;
+    $('filename').textContent = file.name;
+    say('');
+    markDirty();
+    renderWithFont();
+  };
+  img.onerror = () => say(`Couldn't open "${file.name}". Try saving it as a JPG or PNG first.`, 'error');
+  img.src = url;
+}
+$('file').addEventListener('change', (e) => loadFile(e.target.files[0]));
+
+const stage = $('stage');
+stage.addEventListener('dragover', (e) => { e.preventDefault(); stage.classList.add('dragging'); });
+stage.addEventListener('dragleave', () => stage.classList.remove('dragging'));
+stage.addEventListener('drop', (e) => {
+  e.preventDefault();
+  stage.classList.remove('dragging');
+  loadFile(e.dataTransfer.files[0]);
+});
+
+// ---- Drag to reposition the photo inside the square ----
+let drag = null;
+canvas.addEventListener('pointerdown', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const { w: iw, h: ih } = imgSize(state.image);
+  const scale = Math.max(PHOTO / iw, PHOTO / ih);
+  drag = {
+    x: e.clientX, y: e.clientY, panX: state.panX, panY: state.panY, toCanvas: W / rect.width,
+    spareX: iw * scale - PHOTO,  // how much wider than the square the photo is
+    spareY: ih * scale - PHOTO,
+  };
+  canvas.setPointerCapture(e.pointerId);
+  canvas.classList.add('panning');
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (!drag) return;
+  const dx = (e.clientX - drag.x) * drag.toCanvas;
+  const dy = (e.clientY - drag.y) * drag.toCanvas;
+  if (drag.spareX > 0) state.panX = Math.min(1, Math.max(0, drag.panX - dx / drag.spareX));
+  if (drag.spareY > 0) state.panY = Math.min(1, Math.max(0, drag.panY - dy / drag.spareY));
+  render();
+});
+const endDrag = () => {
+  if (drag && (drag.panX !== state.panX || drag.panY !== state.panY)) markDirty();
+  drag = null;
+  canvas.classList.remove('panning');
+};
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+
+// ---- Text controls ----
+$('caption').addEventListener('input', () => { markDirty(); render(); });
+$('font').addEventListener('change', () => { markDirty(); renderWithFont(); });
+$('size').addEventListener('input', (e) => { $('sizeOut').textContent = e.target.value; markDirty(); render(); });
+function chooseInk(color) {
+  document.querySelectorAll('.ink').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.ink === color)));
+  state.ink = color;
+}
+document.querySelectorAll('.ink').forEach((btn) => {
+  btn.addEventListener('click', () => { chooseInk(btn.dataset.ink); markDirty(); render(); });
+});
+
+// ---- Turning the canvas into files ----
+function canvasBlob(c, type, quality) {
+  return new Promise((resolve, reject) => {
+    try { c.toBlob((b) => (b ? resolve(b) : reject(new Error('Couldn\'t create the image.'))), type, quality); }
+    catch (err) { reject(err); }
+  });
+}
+
+async function polaroidPng() {
+  await renderWithFont();
+  return canvasBlob(canvas, 'image/png');
+}
+
+// Store the original photo as a JPG, at most 2000 px on its longest side.
+function photoJpg() {
+  const { w, h } = imgSize(state.image);
+  const scale = Math.min(1, 2000 / Math.max(w, h));
+  const c = document.createElement('canvas');
+  c.width = Math.round(w * scale);
+  c.height = Math.round(h * scale);
+  c.getContext('2d').drawImage(state.image, 0, 0, c.width, c.height);
+  return canvasBlob(c, 'image/jpeg', 0.9);
+}
+
+function settings() {
+  return {
+    caption: $('caption').value.trim().slice(0, 80),
+    font: $('font').value,
+    text_size: Number($('size').value),
+    ink: state.ink,
+    frame: state.frame,
+    pan_x: state.panX,
+    pan_y: state.panY,
+  };
+}
+
+// ---- Save to my account ----
+$('controls').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = $('save');
+  btn.disabled = true;
+  say('Saving…');
+  try {
+    const png = await polaroidPng();
+    const isNew = !state.row || !state.row.render_path;
+    let row = state.row;
+    if (!row) {
+      const { data, error } = await sb.from('polaroids').insert(settings()).select().single();
+      if (error) throw error;
+      row = data;
+      state.row = row;  // if an upload below fails, the next Save reuses this row
+    }
+    const folder = state.user.id;
+    const photoPath = `${folder}/${row.id}.jpg`;
+    const renderPath = `${folder}/${row.id}.png`;
+    if (state.photoChanged || !row.photo_path) {
+      const { error } = await sb.storage.from('photos')
+        .upload(photoPath, await photoJpg(), { contentType: 'image/jpeg', upsert: true });
+      if (error) throw error;
+    }
+    {
+      const { error } = await sb.storage.from('photos')
+        .upload(renderPath, png, { contentType: 'image/png', upsert: true });
+      if (error) throw error;
+    }
+    const { data: saved, error } = await sb.from('polaroids')
+      .update({ ...settings(), photo_path: photoPath, render_path: renderPath })
+      .eq('id', row.id).select().single();
+    if (error) throw error;
+    await App.refreshSharedCopy(saved, png);
+
+    state.row = saved;
+    state.photoChanged = false;
+    state.dirty = false;
+    if (isNew) history.replaceState(null, '', 'editor.html?id=' + saved.id);
+    showEditing();
+    say(saved.share_token ? 'Saved. People with the link see this version.' : 'Saved to your account.', 'ok');
+  } catch (err) {
+    say('Couldn\'t save: ' + App.friendlyError(err), 'error');
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ---- Download ----
+function fileName() {
+  const slug = $('caption').value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+  return `polaroid${slug ? '-' + slug : ''}.png`;
+}
+$('download').addEventListener('click', async () => {
+  const btn = $('download');
+  btn.disabled = true;
+  try {
+    const blob = await polaroidPng();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = fileName();
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  } catch (err) {
+    say('Your browser blocked the download. Open the website version of this page and try again.', 'error');
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ---- Sharing ----
+function showEditing() {
+  const row = state.row;
+  $('pageTitle').textContent = 'Edit polaroid';
+  document.title = 'Edit polaroid · Polaroid Maker';
+  $('save').textContent = 'Save changes';
+  $('shareBox').hidden = false;
+  $('shareOff').hidden = Boolean(row.share_token);
+  $('shareOn').hidden = !row.share_token;
+  if (row.share_token) $('shareLink').textContent = App.shareUrl(row.share_token);
+}
+
+async function shareAction(btn, fn) {
+  btn.disabled = true;
+  try {
+    if (state.dirty) say('Sharing the last saved version. Click Save changes to share your newest edits.');
+    await fn();
+    showEditing();
+  } catch (err) {
+    say(App.friendlyError(err), 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+$('shareOnBtn').addEventListener('click', (e) => shareAction(e.currentTarget, () => App.shareOn(state.row)));
+$('shareOffBtn').addEventListener('click', (e) => shareAction(e.currentTarget, async () => {
+  await App.shareOff(state.row);
+  say('Sharing stopped. The old link no longer works.', 'ok');
+}));
+$('copyLink').addEventListener('click', (e) => App.copyText(App.shareUrl(state.row.share_token), e.currentTarget));
+
+// ---- Opening a saved polaroid ----
+async function openSaved(id) {
+  say('Opening your polaroid…');
+  const { data: row, error } = await sb.from('polaroids').select('*').eq('id', id).maybeSingle();
+  if (error) throw error;
+  if (!row) {
+    say('This polaroid doesn\'t exist or belongs to someone else. Start a new one, or pick one from My polaroids.', 'error');
+    history.replaceState(null, '', 'editor.html');
+    return;
+  }
+  if (row.photo_path) {
+    const { data: signed, error: sErr } = await sb.storage.from('photos').createSignedUrl(row.photo_path, 3600);
+    if (sErr) throw sErr;
+    state.image = await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';  // lets the photo be saved back into a PNG
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('Couldn\'t load the saved photo.'));
+      img.src = signed.signedUrl;
+    });
+    $('filename').textContent = 'Saved photo';
+  }
+  $('caption').value = row.caption;
+  $('font').value = row.font;
+  $('size').value = row.text_size;
+  $('sizeOut').textContent = row.text_size;
+  chooseInk(row.ink);
+  state.panX = row.pan_x;
+  state.panY = row.pan_y;
+  state.row = row;
+  state.photoChanged = false;
+  showEditing();
+  await chooseFrame(row.frame);
+  await renderWithFont();
+  say('');
+}
+
+async function start() {
+  buildFramePicker();
+  renderWithFont();
+  document.fonts.ready.then(renderWithFont);
+  if (!App.configured) return;
+  state.user = await App.requireUser();
+  const id = new URLSearchParams(location.search).get('id');
+  if (id) {
+    $('navNew').removeAttribute('aria-current');
+    try { await openSaved(id); } catch (err) { say(App.friendlyError(err), 'error'); }
+  } else {
+    $('navNew').setAttribute('aria-current', 'page');
+  }
+}
+start();
+</script>
+</body>
+</html>

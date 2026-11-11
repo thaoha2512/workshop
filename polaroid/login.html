@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Log in · Polaroid Maker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Nunito+Sans:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="app.css">
+<style>
+body { padding-block: 48px; display: grid; place-items: start center; }
+.card {
+  width: min(100%, 400px);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 28px 24px;
+  display: grid;
+  gap: 18px;
+}
+h1 { font: 600 2.6rem/1 var(--hand); margin: 0; }
+.intro { margin: 0; color: var(--muted); }
+.tabs { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.tabs button {
+  font: 700 14px var(--ui);
+  padding: 9px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.tabs button[aria-selected="true"] { background: var(--accent); color: var(--accent-fg); }
+form { display: grid; gap: 14px; }
+label { display: grid; gap: 6px; font-weight: 600; font-size: 14px; }
+input {
+  font: inherit;
+  color: var(--fg);
+  background: var(--desk);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px 12px;
+  width: 100%;
+}
+.hint { font-size: 13px; color: var(--muted); font-weight: 400; }
+</style>
+</head>
+<body>
+<main class="card">
+  <h1>Polaroid Maker</h1>
+  <p class="intro">Log in to save your polaroids, edit them later, and share view-only links.</p>
+
+  <div class="tabs" role="tablist">
+    <button type="button" role="tab" id="tabLogin" aria-selected="true">Log in</button>
+    <button type="button" role="tab" id="tabSignup" aria-selected="false">Create account</button>
+  </div>
+
+  <form id="authForm" novalidate>
+    <label>Email
+      <input type="email" id="email" autocomplete="email" required>
+    </label>
+    <label>Password
+      <input type="password" id="password" autocomplete="current-password" minlength="6" required>
+      <span class="hint" id="pwHint" hidden>At least 6 characters.</span>
+    </label>
+    <button type="submit" class="btn primary" id="submit">Log in</button>
+    <p class="msg" id="msg" role="status"></p>
+  </form>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script>
+const { sb } = App;
+const $ = (id) => document.getElementById(id);
+const next = App.safeNext(new URLSearchParams(location.search).get('next'));
+let mode = 'login';
+
+function setMode(m) {
+  mode = m;
+  $('tabLogin').setAttribute('aria-selected', m === 'login');
+  $('tabSignup').setAttribute('aria-selected', m === 'signup');
+  $('submit').textContent = m === 'login' ? 'Log in' : 'Create account';
+  $('password').autocomplete = m === 'login' ? 'current-password' : 'new-password';
+  $('pwHint').hidden = m === 'login';
+  say('');
+}
+$('tabLogin').addEventListener('click', () => setMode('login'));
+$('tabSignup').addEventListener('click', () => setMode('signup'));
+
+function say(text, kind) {
+  $('msg').textContent = text;
+  $('msg').className = 'msg' + (kind ? ' ' + kind : '');
+}
+
+// Already logged in (or just clicked the confirmation link in the email)? Go straight in.
+if (sb) {
+  sb.auth.getSession().then(({ data: { session } }) => { if (session) location.replace(next); });
+  sb.auth.onAuthStateChange((event, session) => { if (session) location.replace(next); });
+}
+
+$('authForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!sb) return;
+  const email = $('email').value.trim();
+  const password = $('password').value;
+  if (!email || !email.includes('@')) return say('Enter your email address.', 'error');
+  if (password.length < 6) return say('Your password needs at least 6 characters.', 'error');
+
+  $('submit').disabled = true;
+  try {
+    if (mode === 'login') {
+      const { error } = await sb.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      say('Logged in.', 'ok');
+    } else {
+      const { data, error } = await sb.auth.signUp({
+        email, password,
+        options: { emailRedirectTo: new URL('login.html', location.href).href },
+      });
+      if (error) throw error;
+      if (!data.session) {
+        setMode('login');
+        say(`Account created. We sent a confirmation link to ${email}. Click it, then log in here.`, 'ok');
+      }
+    }
+  } catch (err) {
+    const m = App.friendlyError(err);
+    if (/invalid login credentials/i.test(m)) say('That email and password don\'t match. Check them, or create an account.', 'error');
+    else if (/email not confirmed/i.test(m)) say('Confirm your email first: click the link we sent you, then log in.', 'error');
+    else if (/already registered/i.test(m)) say('There\'s already an account with this email. Log in instead.', 'error');
+    else say(m, 'error');
+  } finally {
+    $('submit').disabled = false;
+  }
+});
+</script>
+</body>
+</html>

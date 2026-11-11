@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>A polaroid for you</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Nunito+Sans:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="app.css">
+<style>
+body { padding-block: 40px 56px; }
+main { max-width: 560px; margin: 0 auto; display: grid; gap: 24px; justify-items: center; text-align: center; }
+.photo {
+  width: min(100%, 460px);
+  max-width: 100%;
+  aspect-ratio: 1080 / 1313;
+  display: block;
+  background: #fbfaf6;
+  transform: rotate(-1.5deg);
+  box-shadow: 0 2px 4px var(--shadow), 0 18px 40px var(--shadow);
+}
+.note { color: var(--muted); font-size: 14px; margin: 0; }
+.note a { color: var(--accent); font-weight: 600; }
+.gone h1 { font: 600 2.4rem/1 var(--hand); margin: 0 0 8px; }
+.gone p { margin: 0; color: var(--muted); max-width: 42ch; }
+</style>
+</head>
+<body>
+<main>
+  <img class="photo" id="photo" alt="" hidden>
+  <p class="note" id="note" hidden>Shared with Polaroid Maker. <a href="index.html">Make your own</a></p>
+  <div class="gone" id="gone" hidden>
+    <h1>This polaroid isn't available</h1>
+    <p>The link may be incomplete, or the owner stopped sharing it. Ask them for a new link.</p>
+  </div>
+  <p class="note" id="loading">Loading…</p>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script>
+// View-only: this page reads one shared polaroid by its secret token. It has no way to change anything.
+const $ = (id) => document.getElementById(id);
+
+function gone() {
+  $('loading').hidden = true;
+  $('gone').hidden = false;
+  document.title = 'Polaroid not available';
+}
+
+async function show() {
+  const token = new URLSearchParams(location.search).get('s') || '';
+  if (!/^[0-9a-f-]{36}$/i.test(token) || !App.sb) return gone();
+  const { data, error } = await App.sb.rpc('get_shared_polaroid', { token });
+  if (error || !data || !data.length) return gone();
+  const { caption, updated_at } = data[0];
+  const { data: pub } = App.sb.storage.from('shared').getPublicUrl(token + '.png');
+  const img = $('photo');
+  img.alt = caption ? `Polaroid: ${caption}` : 'A polaroid';
+  img.onload = () => { $('loading').hidden = true; img.hidden = false; $('note').hidden = false; };
+  img.onerror = gone;
+  img.src = pub.publicUrl + '?v=' + encodeURIComponent(updated_at);  // always show the newest version
+  if (caption) document.title = caption;
+}
+show();
+</script>
+</body>
+</html>

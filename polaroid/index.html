@@ -3,566 +3,202 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Polaroid Maker</title>
+<title>My Polaroids</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Kalam:wght@400&family=Homemade+Apple&family=Nunito+Sans:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Nunito+Sans:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="app.css">
 <style>
-/* Layout: the polaroid sits on a "desk" on the left; a narrow control card sits on the right and stacks below on phones. */
-:root {
-  --desk: #e3e6e9;
-  --panel: #f8f9fa;
-  --fg: #22252a;
-  --muted: #646a73;
-  --line: #d3d8de;
-  --accent: #2c5b86;
-  --accent-fg: #ffffff;
-  --error: #b3261e;
-  --shadow: rgba(20, 28, 38, 0.28);
-  --ui: "Nunito Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --hand: "Caveat", "Bradley Hand", "Segoe Print", cursive;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --desk: #17191c;
-    --panel: #22252a;
-    --fg: #e8eaed;
-    --muted: #a0a6ae;
-    --line: #363a41;
-    --accent: #7fb0dd;
-    --accent-fg: #10161c;
-    --error: #f2b8b5;
-    --shadow: rgba(0, 0, 0, 0.6);
-    color-scheme: dark;
-  }
-}
+.head { display: flex; align-items: end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.head h1 { font: 600 2.4rem/1 var(--hand); margin: 0; }
+.head p { margin: 4px 0 0; color: var(--muted); }
 
-* { box-sizing: border-box; }
-html, body { margin: 0; }
-body {
-  background: var(--desk);
-  color: var(--fg);
-  font: 15px/1.5 var(--ui);
-  padding-block: 32px 48px;
-  padding-left: max(16px, env(safe-area-inset-left, 0px));
-  padding-right: max(16px, env(safe-area-inset-right, 0px));
-}
-.wrap { max-width: 1040px; margin: 0 auto; display: grid; gap: 28px; }
-header h1 {
-  font: 600 2.6rem/1 var(--hand);
-  margin: 0 0 4px;
-  text-wrap: balance;
-}
-header p { margin: 0; color: var(--muted); max-width: 60ch; }
-
-.studio {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 32px;
-  align-items: start;
-}
-@media (max-width: 760px) { .studio { grid-template-columns: minmax(0, 1fr); } }
-
-/* The desk */
-.stage {
-  display: grid;
-  place-items: center;
-  padding: 24px 8px;
-  border-radius: 6px;
-  outline: 2px dashed transparent;
-  outline-offset: -2px;
-  transition: outline-color .15s;
-}
-.stage.dragging { outline-color: var(--accent); }
-#polaroid {
-  width: min(100%, 440px);
-  height: auto;
-  display: block;
-  transform: rotate(-2deg);
-  box-shadow: 0 2px 4px var(--shadow), 0 18px 40px var(--shadow);
-  cursor: grab;
-  touch-action: none;
-}
-#polaroid.panning { cursor: grabbing; }
-.hint { margin: 18px 0 0; font-size: 13px; color: var(--muted); text-align: center; }
-
-/* Controls */
-.controls {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 20px;
-  display: grid;
-  gap: 20px;
-}
-.field { display: grid; gap: 8px; }
-.label {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-textarea, select {
-  font: inherit;
-  color: var(--fg);
-  background: var(--desk);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 8px 10px;
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 28px 24px; }
+.card { display: grid; gap: 10px; align-content: start; min-width: 0; }
+.card a.thumb { display: block; }
+.card img {
   width: 100%;
-}
-textarea { resize: vertical; min-height: 64px; }
-textarea:focus-visible, select:focus-visible, input:focus-visible, button:focus-visible, .upload:focus-within {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-input[type="range"] { flex: 1; accent-color: var(--accent); min-width: 120px; }
-.small { font-size: 13px; color: var(--muted); }
-
-.upload {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 12px;
-  border: 1px dashed var(--muted);
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 600;
-}
-.upload:hover { border-color: var(--accent); color: var(--accent); }
-.upload input { position: absolute; opacity: 0; width: 1px; height: 1px; }
-#filename { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
-#error { font-size: 13px; color: var(--error); margin: 0; }
-
-.inks { display: flex; gap: 10px; }
-.ink {
-  width: 30px; height: 30px;
-  border-radius: 50%;
-  border: 2px solid var(--line);
-  cursor: pointer;
-  padding: 0;
-}
-.ink[aria-pressed="true"] { border-color: var(--fg); box-shadow: 0 0 0 2px var(--panel) inset; }
-
-.frames { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-.frame-btn {
-  aspect-ratio: 4 / 5;
   max-width: 100%;
-  border: 2px solid var(--line);
-  border-radius: 6px;
-  background: #fbfaf6 center / cover no-repeat;
-  cursor: pointer;
-  padding: 0;
-  position: relative;
+  aspect-ratio: 1080 / 1313;
+  object-fit: cover;
+  display: block;
+  background: #fbfaf6;
+  box-shadow: 0 1px 3px var(--shadow), 0 10px 24px var(--shadow);
+  transition: transform .15s;
 }
-.frame-btn[aria-pressed="true"] { border-color: var(--fg); box-shadow: 0 0 0 2px var(--panel) inset; }
-.frame-btn.loading { opacity: .5; }
-#frameName { font-size: 13px; color: var(--muted); }
+.card:nth-child(odd) img { transform: rotate(-1.2deg); }
+.card:nth-child(even) img { transform: rotate(1deg); }
+.card a.thumb:hover img { transform: rotate(0) scale(1.02); }
+.meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.chip {
+  font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+  padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted);
+}
+.chip.shared { border-color: var(--ok); color: var(--ok); }
+.caption { font-weight: 600; overflow-wrap: anywhere; margin: 0; }
+.actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.actions .btn { padding: 6px 10px; font-size: 13px; }
 
-#download {
-  font: 700 15px var(--ui);
-  background: var(--accent);
-  color: var(--accent-fg);
-  border: 0;
-  border-radius: 6px;
-  padding: 12px 16px;
-  cursor: pointer;
+.empty {
+  border: 1px dashed var(--muted);
+  border-radius: 10px;
+  padding: 40px 20px;
+  text-align: center;
+  display: grid;
+  gap: 12px;
+  justify-items: center;
 }
-#download:hover { filter: brightness(1.08); }
-#download:disabled { opacity: .6; cursor: progress; }
-
-@media (prefers-reduced-motion: reduce) {
-  .stage { transition: none; }
-}
+.empty h2 { font: 600 2rem/1 var(--hand); margin: 0; }
+.empty p { margin: 0; color: var(--muted); max-width: 44ch; }
+@media (prefers-reduced-motion: reduce) { .card img { transition: none; } }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <h1>Polaroid Maker</h1>
-    <p>Upload a photo, write something in the strip at the bottom, and save it as a PNG.</p>
-  </header>
+<header class="topbar">
+  <a class="brand" href="index.html">Polaroid Maker</a>
+  <nav>
+    <a class="navlink" href="index.html" aria-current="page">My polaroids</a>
+    <a class="navlink" href="editor.html">New polaroid</a>
+    <span class="who" id="who"></span>
+    <button type="button" class="btn" id="logout">Log out</button>
+  </nav>
+</header>
 
-  <main class="studio">
-    <section class="stage" id="stage" aria-label="Polaroid preview">
-      <canvas id="polaroid" width="1080" height="1313" role="img" aria-label="Your polaroid"></canvas>
-      <p class="hint">Drag the photo to choose which part shows. You can also drop an image file here.</p>
-    </section>
+<main class="wrap">
+  <div class="head">
+    <div>
+      <h1>My polaroids</h1>
+      <p id="count">Loading your polaroids…</p>
+    </div>
+    <a class="btn primary" href="editor.html">New polaroid</a>
+  </div>
+  <p class="msg error" id="error" role="alert" hidden></p>
+  <div class="grid" id="grid"></div>
+  <div class="empty" id="empty" hidden>
+    <h2>No polaroids yet</h2>
+    <p>Make your first one: upload a photo, write a caption, and click Save. It will show up here so you can edit or share it.</p>
+    <a class="btn primary" href="editor.html">Make a polaroid</a>
+  </div>
+</main>
 
-    <form class="controls" id="controls">
-      <div class="field">
-        <span class="label">Photo</span>
-        <label class="upload">
-          <input type="file" id="file" accept="image/*">
-          Choose a photo…
-        </label>
-        <span id="filename">Showing a sample photo</span>
-        <p id="error" role="alert" hidden></p>
-      </div>
-
-      <div class="field">
-        <span class="label" id="frameLabel">Frame</span>
-        <div class="frames" id="frames" role="group" aria-labelledby="frameLabel"></div>
-        <span id="frameName">Plain white</span>
-      </div>
-
-      <div class="field">
-        <label class="label" for="caption">Caption</label>
-        <textarea id="caption" maxlength="80" rows="2">Summer at the lake ☀</textarea>
-        <span class="small">Up to two lines. Press Enter for a new line.</span>
-      </div>
-
-      <div class="field">
-        <label class="label" for="font">Handwriting</label>
-        <select id="font">
-          <option value="Caveat" selected>Felt pen (Caveat)</option>
-          <option value="Kalam">Ballpoint (Kalam)</option>
-          <option value="Homemade Apple">Cursive (Homemade Apple)</option>
-        </select>
-      </div>
-
-      <div class="field">
-        <label class="label" for="size">Text size</label>
-        <div class="row">
-          <input type="range" id="size" min="40" max="130" value="92">
-          <span class="small" id="sizeOut">92</span>
-        </div>
-      </div>
-
-      <div class="field">
-        <span class="label" id="inkLabel">Ink colour</span>
-        <div class="inks" role="group" aria-labelledby="inkLabel">
-          <button type="button" class="ink" data-ink="#1f2023" style="background:#1f2023" aria-label="Black" aria-pressed="true"></button>
-          <button type="button" class="ink" data-ink="#1f3f8f" style="background:#1f3f8f" aria-label="Blue" aria-pressed="false"></button>
-          <button type="button" class="ink" data-ink="#b0252b" style="background:#b0252b" aria-label="Red" aria-pressed="false"></button>
-          <button type="button" class="ink" data-ink="#5a5f66" style="background:#5a5f66" aria-label="Pencil grey" aria-pressed="false"></button>
-        </div>
-      </div>
-
-      <button type="submit" id="download">Download PNG</button>
-    </form>
-  </main>
-</div>
-
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
 <script>
-// Real Polaroid 600 proportions: 88 × 107 mm card, 79 × 79 mm photo,
-// thin sides, a slightly thicker top, and a wide strip at the bottom for writing.
-const W = 1080, H = 1313;
-const SIDE = 55, TOP = 66, PHOTO = 970;
-const STRIP_TOP = TOP + PHOTO;          // where the writing strip starts
-const STRIP_H = H - STRIP_TOP;          // 277 px
-
-const canvas = document.getElementById('polaroid');
-const ctx = canvas.getContext('2d');
+const { sb } = App;
 const $ = (id) => document.getElementById(id);
+let rows = [];
 
-const state = {
-  image: makeSamplePhoto(),
-  panX: 0.5,  // 0 = show left edge, 1 = show right edge
-  panY: 0.5,
-  ink: '#1f2023',
-  pattern: null,  // null = plain white frame, otherwise a loaded pattern image
-};
+function showError(text) { $('error').textContent = text; $('error').hidden = !text; }
 
-// Frame patterns live in the patterns/ folder; small previews are in patterns/thumbs/.
-const PATTERNS = [
-  { id: 'plain', name: 'Plain white' },
-  { id: 'blue-gingham-stars', name: 'Blue gingham with stars' },
-  { id: 'rainbow-plaid-stars', name: 'Rainbow plaid with stars' },
-  { id: 'lavender-lime-stripes', name: 'Lavender and lime stripes' },
-  { id: 'lime-starbursts', name: 'Lime starbursts' },
-  { id: 'pastel-grain', name: 'Pastel grain' },
-  { id: 'rainbow-glitter', name: 'Rainbow glitter' },
-];
-const patternCache = {};
+async function load() {
+  await App.requireUser();
+  const { data, error } = await sb.from('polaroids')
+    .select('id, caption, render_path, photo_path, share_token, updated_at')
+    .order('updated_at', { ascending: false });
+  if (error) { $('count').textContent = ''; return showError(App.friendlyError(error)); }
+  rows = data;
 
-function loadPattern(id) {
-  if (!patternCache[id]) {
-    patternCache[id] = new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = reject;
-      img.src = `patterns/${id}.jpg`;
-    });
+  const paths = rows.map((r) => r.render_path).filter(Boolean);
+  const urls = {};
+  if (paths.length) {
+    const { data: signed } = await sb.storage.from('photos').createSignedUrls(paths, 3600);
+    (signed || []).forEach((s) => { if (s.signedUrl) urls[s.path] = s.signedUrl; });
   }
-  return patternCache[id];
+  render(urls);
 }
 
-function buildFramePicker() {
-  const box = $('frames');
-  PATTERNS.forEach((p, i) => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'frame-btn';
-    btn.setAttribute('aria-label', p.name);
-    btn.setAttribute('aria-pressed', i === 0 ? 'true' : 'false');
-    btn.title = p.name;
-    if (p.id !== 'plain') btn.style.backgroundImage = `url("patterns/thumbs/${p.id}.jpg")`;
-    btn.addEventListener('click', () => chooseFrame(p, btn));
-    box.appendChild(btn);
-  });
-}
+function render(urls) {
+  const grid = $('grid');
+  grid.textContent = '';
+  $('empty').hidden = rows.length > 0;
+  $('count').textContent = rows.length === 1 ? '1 polaroid' : `${rows.length} polaroids`;
 
-async function chooseFrame(p, btn) {
-  document.querySelectorAll('.frame-btn').forEach((b) => b.setAttribute('aria-pressed', 'false'));
-  btn.setAttribute('aria-pressed', 'true');
-  $('frameName').textContent = p.name;
-  $('error').hidden = true;
-  if (p.id === 'plain') { state.pattern = null; render(); return; }
-  btn.classList.add('loading');
-  try {
-    const img = await loadPattern(p.id);
-    if (btn.getAttribute('aria-pressed') === 'true') { state.pattern = img; render(); }
-  } catch (e) {
-    $('error').textContent = `Couldn't load the "${p.name}" pattern. Check that the patterns folder sits next to this page.`;
-    $('error').hidden = false;
-  } finally {
-    btn.classList.remove('loading');
-  }
-}
+  rows.forEach((row) => {
+    const card = document.createElement('article');
+    card.className = 'card';
 
-function drawFrame() {
-  ctx.fillStyle = '#fbfaf6';
-  ctx.fillRect(0, 0, W, H);
-  const img = state.pattern;
-  if (!img) return;
-  // Fill the whole card with the pattern, cropping the extra like a photo.
-  const scale = Math.max(W / img.naturalWidth, H / img.naturalHeight);
-  const sw = W / scale, sh = H / scale;
-  ctx.drawImage(img, (img.naturalWidth - sw) / 2, (img.naturalHeight - sh) / 2, sw, sh, 0, 0, W, H);
-}
+    const link = document.createElement('a');
+    link.className = 'thumb';
+    link.href = 'editor.html?id=' + row.id;
+    link.title = 'Edit this polaroid';
+    const img = document.createElement('img');
+    img.alt = row.caption ? `Polaroid: ${row.caption}` : 'Polaroid';
+    img.loading = 'lazy';
+    if (urls[row.render_path]) img.src = urls[row.render_path];
+    link.appendChild(img);
 
-// A painted sample so the page opens showing what it does.
-function makeSamplePhoto() {
-  const c = document.createElement('canvas');
-  c.width = 1200; c.height = 900;
-  const g = c.getContext('2d');
-  const sky = g.createLinearGradient(0, 0, 0, 560);
-  sky.addColorStop(0, '#f6b26b'); sky.addColorStop(0.6, '#f9d9a8'); sky.addColorStop(1, '#fbe9cf');
-  g.fillStyle = sky; g.fillRect(0, 0, 1200, 560);
-  g.fillStyle = '#fff4dc'; g.beginPath(); g.arc(760, 470, 90, 0, Math.PI * 2); g.fill();
-  g.fillStyle = '#7d8f8a';
-  g.beginPath(); g.moveTo(0, 560); g.lineTo(0, 420); g.quadraticCurveTo(220, 330, 460, 470); g.quadraticCurveTo(560, 520, 640, 560); g.fill();
-  g.fillStyle = '#5c6e6b';
-  g.beginPath(); g.moveTo(1200, 560); g.lineTo(1200, 400); g.quadraticCurveTo(1000, 360, 860, 560); g.fill();
-  const water = g.createLinearGradient(0, 560, 0, 900);
-  water.addColorStop(0, '#6f9fb6'); water.addColorStop(1, '#2f5f78');
-  g.fillStyle = water; g.fillRect(0, 560, 1200, 340);
-  g.strokeStyle = 'rgba(255, 240, 210, .55)'; g.lineWidth = 4;
-  for (let i = 0; i < 14; i++) {
-    const y = 590 + i * 22, w = 160 - i * 8;
-    g.beginPath(); g.moveTo(760 - w / 2, y); g.lineTo(760 + w / 2, y); g.stroke();
-  }
-  g.fillStyle = '#3b2e25'; g.fillRect(140, 700, 420, 26); g.fillRect(170, 726, 14, 174); g.fillRect(520, 726, 14, 174);
-  return c;
-}
+    const caption = document.createElement('p');
+    caption.className = 'caption';
+    caption.textContent = row.caption || 'No caption';
 
-function drawPhoto() {
-  const img = state.image;
-  const iw = img.naturalWidth || img.width;
-  const ih = img.naturalHeight || img.height;
-  const scale = Math.max(PHOTO / iw, PHOTO / ih);   // fill the square, crop the rest
-  const sw = PHOTO / scale, sh = PHOTO / scale;
-  const sx = (iw - sw) * state.panX;
-  const sy = (ih - sh) * state.panY;
-  ctx.drawImage(img, sx, sy, sw, sh, SIDE, TOP, PHOTO, PHOTO);
-  // A faint edge where the photo meets the card, like the real thing.
-  ctx.strokeStyle = 'rgba(0, 0, 0, .12)';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(SIDE + 1, TOP + 1, PHOTO - 2, PHOTO - 2);
-}
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const when = document.createElement('span');
+    when.textContent = 'Edited ' + new Date(row.updated_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+    const chip = document.createElement('span');
+    chip.className = 'chip' + (row.share_token ? ' shared' : '');
+    chip.textContent = row.share_token ? 'Shared' : 'Private';
+    meta.append(chip, when);
 
-// Break the caption into at most two lines that fit the strip, shrinking the text if needed.
-function layoutCaption(text, font, startSize) {
-  const maxWidth = W - SIDE * 2 - 40;
-  const maxLines = 2;
-  for (let size = startSize; size >= 24; size -= 2) {
-    ctx.font = `${size}px "${font}"`;
-    const lines = [];
-    for (const para of text.split('\n')) {
-      const words = para.split(/\s+/).filter(Boolean);
-      let line = '';
-      for (const word of words) {
-        const test = line ? line + ' ' + word : word;
-        if (ctx.measureText(test).width <= maxWidth || !line) line = test;
-        else { lines.push(line); line = word; }
-      }
-      lines.push(line);
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+    const edit = document.createElement('a');
+    edit.className = 'btn';
+    edit.href = 'editor.html?id=' + row.id;
+    edit.textContent = 'Edit';
+    actions.appendChild(edit);
+
+    if (row.share_token) {
+      const copy = button('Copy link', () => App.copyText(App.shareUrl(row.share_token), copy));
+      const stop = button('Stop sharing', () => withBusy(stop, async () => { await App.shareOff(row); render(urls); }));
+      actions.append(copy, stop);
+    } else {
+      const share = button('Share', () => withBusy(share, async () => {
+        await App.shareOn(row);
+        render(urls);
+      }));
+      actions.appendChild(share);
     }
-    while (lines.length && lines[lines.length - 1] === '') lines.pop();
-    const lineH = size * (font === 'Homemade Apple' ? 1.45 : 1.15);
-    const fits = lines.length <= maxLines &&
-      lines.every((l) => ctx.measureText(l).width <= maxWidth) &&
-      lines.length * lineH <= STRIP_H * 0.85;
-    if (fits) return { size, lines, lineH };
-  }
-  ctx.font = `24px "${font}"`;
-  return { size: 24, lines: text.split('\n').slice(0, maxLines), lineH: 28 };
-}
 
-function drawCaption() {
-  const text = $('caption').value.trim();
-  if (!text) return;
-  const font = $('font').value;
-  const { size, lines, lineH } = layoutCaption(text, font, Number($('size').value));
-  ctx.font = `${size}px "${font}"`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  const centerY = STRIP_TOP + STRIP_H / 2;
-  const firstY = centerY - ((lines.length - 1) * lineH) / 2;
-  ctx.save();
-  // Written by hand, so not perfectly level.
-  ctx.translate(W / 2, centerY);
-  ctx.rotate(-0.012);
-  ctx.translate(-W / 2, -centerY);
-  if (state.pattern) {
-    // On a patterned frame, write on a white paper label so the words stay readable.
-    const textW = Math.max(...lines.map((l) => ctx.measureText(l).width));
-    const labelW = Math.min(W - SIDE * 2, textW + 70);
-    const labelH = Math.min(STRIP_H - 30, lines.length * lineH + 40);
-    const x = (W - labelW) / 2, y = centerY - labelH / 2;
-    ctx.shadowColor = 'rgba(0, 0, 0, .18)';
-    ctx.shadowBlur = 10;
-    ctx.shadowOffsetY = 3;
-    ctx.fillStyle = 'rgba(253, 252, 249, .95)';
-    ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(x, y, labelW, labelH, 8); else ctx.rect(x, y, labelW, labelH);
-    ctx.fill();
-    ctx.shadowColor = 'transparent';
-  }
-  ctx.fillStyle = state.ink;
-  lines.forEach((line, i) => ctx.fillText(line, W / 2, firstY + i * lineH));
-  ctx.restore();
-}
+    const del = button('Delete', () => withBusy(del, async () => {
+      if (!window.confirm(`Delete "${row.caption || 'this polaroid'}"? This can't be undone, and its share link will stop working.`)) return;
+      await deletePolaroid(row);
+      rows = rows.filter((r) => r.id !== row.id);
+      render(urls);
+    }));
+    del.classList.add('danger');
+    actions.appendChild(del);
 
-function render() {
-  ctx.clearRect(0, 0, W, H);
-  drawFrame();
-  drawPhoto();
-  drawCaption();
-}
-
-// Wait for the handwriting font before drawing, so the canvas never uses a fallback font.
-async function renderWithFont() {
-  const font = $('font').value;
-  try { await document.fonts.load(`40px "${font}"`); } catch (e) { /* draw with fallback */ }
-  render();
-}
-
-// ---- Photo upload ----
-function loadFile(file) {
-  const err = $('error');
-  err.hidden = true;
-  if (!file) return;
-  if (!file.type.startsWith('image/')) {
-    err.textContent = `"${file.name}" isn't an image. Choose a JPG, PNG or WebP file.`;
-    err.hidden = false;
-    return;
-  }
-  const url = URL.createObjectURL(file);
-  const img = new Image();
-  img.onload = () => {
-    state.image = img;
-    state.panX = state.panY = 0.5;
-    $('filename').textContent = file.name;
-    renderWithFont();
-  };
-  img.onerror = () => {
-    err.textContent = `Couldn't open "${file.name}". Try saving it as a JPG or PNG first.`;
-    err.hidden = false;
-  };
-  img.src = url;
-}
-$('file').addEventListener('change', (e) => loadFile(e.target.files[0]));
-
-const stage = $('stage');
-stage.addEventListener('dragover', (e) => { e.preventDefault(); stage.classList.add('dragging'); });
-stage.addEventListener('dragleave', () => stage.classList.remove('dragging'));
-stage.addEventListener('drop', (e) => {
-  e.preventDefault();
-  stage.classList.remove('dragging');
-  loadFile(e.dataTransfer.files[0]);
-});
-
-// ---- Drag to reposition the photo inside the square ----
-let drag = null;
-canvas.addEventListener('pointerdown', (e) => {
-  const rect = canvas.getBoundingClientRect();
-  const toCanvas = W / rect.width;
-  const img = state.image;
-  const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
-  const scale = Math.max(PHOTO / iw, PHOTO / ih);
-  drag = {
-    x: e.clientX, y: e.clientY, panX: state.panX, panY: state.panY, toCanvas,
-    spareX: iw * scale - PHOTO,  // how much wider than the square the photo is
-    spareY: ih * scale - PHOTO,
-  };
-  canvas.setPointerCapture(e.pointerId);
-  canvas.classList.add('panning');
-});
-canvas.addEventListener('pointermove', (e) => {
-  if (!drag) return;
-  const dx = (e.clientX - drag.x) * drag.toCanvas;
-  const dy = (e.clientY - drag.y) * drag.toCanvas;
-  if (drag.spareX > 0) state.panX = Math.min(1, Math.max(0, drag.panX - dx / drag.spareX));
-  if (drag.spareY > 0) state.panY = Math.min(1, Math.max(0, drag.panY - dy / drag.spareY));
-  render();
-});
-const endDrag = () => { drag = null; canvas.classList.remove('panning'); };
-canvas.addEventListener('pointerup', endDrag);
-canvas.addEventListener('pointercancel', endDrag);
-
-// ---- Text controls ----
-$('caption').addEventListener('input', render);
-$('font').addEventListener('change', renderWithFont);
-$('size').addEventListener('input', (e) => { $('sizeOut').textContent = e.target.value; render(); });
-document.querySelectorAll('.ink').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.ink').forEach((b) => b.setAttribute('aria-pressed', 'false'));
-    btn.setAttribute('aria-pressed', 'true');
-    state.ink = btn.dataset.ink;
-    render();
+    card.append(link, caption, meta, actions);
+    grid.appendChild(card);
   });
-});
-
-// ---- Download ----
-function fileName() {
-  const slug = $('caption').value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
-  return `polaroid${slug ? '-' + slug : ''}.png`;
 }
-$('controls').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const btn = $('download');
-  btn.disabled = true;
-  btn.textContent = 'Saving…';
-  await renderWithFont();
-  const done = () => { btn.disabled = false; btn.textContent = 'Download PNG'; };
-  try {
-    canvas.toBlob(saveBlob, 'image/png');
-  } catch (err) {
-    // Browsers block saving pattern images when the page is opened straight from a file.
-    $('error').textContent = 'Your browser blocked the download because this page was opened from a file. Use the website version to download patterned polaroids, or pick the plain white frame.';
-    $('error').hidden = false;
-    done();
-  }
-  function saveBlob(blob) {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = fileName();
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-    done();
-  }
-});
 
-buildFramePicker();
-renderWithFont();
-document.fonts.ready.then(renderWithFont);
+function button(label, onClick) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'btn';
+  b.textContent = label;
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+async function withBusy(btn, fn) {
+  btn.disabled = true;
+  showError('');
+  try { await fn(); } catch (err) { showError(App.friendlyError(err)); } finally { btn.disabled = false; }
+}
+
+async function deletePolaroid(row) {
+  if (row.share_token) await sb.storage.from('shared').remove([row.share_token + '.png']);
+  const files = [row.photo_path, row.render_path].filter(Boolean);
+  if (files.length) await sb.storage.from('photos').remove(files);
+  const { error } = await sb.from('polaroids').delete().eq('id', row.id);
+  if (error) throw error;
+}
+
+if (App.configured) load();
 </script>
 </body>
 </html>
